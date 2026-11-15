@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="intro">
+  <h1>Changes awaiting an owner</h1>
+  <p class="lede">An AI agent wrote each change and the reviewer has checked it. Open one to read the code routed to you, answer its decisions and sign off.</p>
+</section>
+
+<ol class="changes">
+{% for p, s, signed in rows %}
+  <li>
+    <a class="change" href="/pr/{{ p.name }}">
+      <div class="change-main">
+        <div class="change-id">#{{ p.issue }}</div>
+        <div class="change-title">{{ p.requirement.title }}</div>
+        <div class="change-meta"><code>{{ p.ref.split("/")[-1] }}</code> · {{ p.hunks|map(attribute="path")|unique|list|length + p.clusters|map(attribute="files")|map("length")|sum }} files · {{ p.routing.total_lines|num }} changed lines</div>
+      </div>
+      <dl class="change-stats">
+        <div><dt>Owner reads</dt><dd>{{ p.routing.read_lines|num }} <small>lines · {{ p.routing.share|pct }}</small></dd></div>
+        <div><dt>Claims</dt><dd class="claimbar">
+          <span class="dot checked"></span>{{ s.checked }} <span class="dot opinion"></span>{{ s.opinion }}{% if s.contradicted %} <span class="dot contradicted"></span>{{ s.contradicted }}{% endif %}</dd></div>
+        <div><dt>Findings</dt><dd>{{ s.findings }}</dd></div>
+        <div><dt>Decisions</dt><dd>{{ s.refusals }}</dd></div>
+      </dl>
+      <div class="change-status">
+        {% if p.returned %}<span class="changes-req">Returned to agent</span>
+        {% elif signed %}<span class="signed">{{ signed.decision }}</span><small>{{ signed.owner }}</small>
+        {% else %}<span class="awaiting">Awaiting sign-off</span>{% endif %}
+      </div>
+    </a>
+  </li>
+{% endfor %}
+</ol>
+<p class="legend"><span class="dot checked"></span>checked: reverting the claim's code makes a test fail <span class="dot opinion"></span>opinion: the writer model's reading, no failing test <span class="dot contradicted"></span>contradicted by a reproduced probe</p>
+{% endblock %}

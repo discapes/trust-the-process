@@ -1,0 +1,930 @@
+{
+ "name": "2283",
+ "ref": "origin/ju26-issue-2283",
+ "issue": 2283,
+ "owner": null,
+ "note": null,
+ "defect": null,
+ "commit": {
+  "sha": "9df83c38409c8bfad0517aebffe48211eda4a5b4",
+  "author": "Stelian Vultur",
+  "date": "2026-11-12 01:14:05 +0200",
+  "message": "implementation for #2283"
+ },
+ "requirement": {
+  "issue": 2283,
+  "title": "Generator and analyzer crash with IndexOutOfRangeException on a closed generic struct from a referenced assembly",
+  "url": "https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2283",
+  "summary": "MessagePackGenerator and MsgPack00xMessagePackAnalyzer throw IndexOutOfRangeException when collecting a closed generic value type declared in a referenced assembly. The crash prevents source generation and leaves the consuming app without GeneratedMessagePackResolver; the requested outcome is a clean build with the resolver generated.",
+  "criteria": [
+   {
+    "id": "REQ-2283.1",
+    "text": "Building `app` in the supplied two-project repro, where `lib` declares generic `record struct Item<T>` and `app` uses `Item<int>` as a member type through a `ProjectReference`, completes without CS8785 or an IndexOutOfRangeException from MessagePackGenerator.",
+    "source": "issue body",
+    "summary": "Repro builds with cross-project Item<int>, without CS8785 or generator crashes"
+   },
+   {
+    "id": "REQ-2283.2",
+    "text": "Building that repro does not produce AD0001 caused by MsgPack00xMessagePackAnalyzer throwing IndexOutOfRangeException.",
+    "source": "issue body",
+    "summary": "Build produces no AD0001 from analyzer IndexOutOfRangeException"
+   },
+   {
+    "id": "REQ-2283.3",
+    "text": "The MessagePack generator contributes output for `app`, and the built `app.dll` contains `GeneratedMessagePackResolver`.",
+    "source": "issue body",
+    "summary": "Generator output includes GeneratedMessagePackResolver in built app.dll"
+   },
+   {
+    "id": "REQ-2283.4",
+    "text": "The crash-free behavior also applies when the referenced generic value type is declared as plain `struct Item<T>` rather than `record struct Item<T>`, without moving it into `app` or adding a custom formatter.",
+    "source": "issue body",
+    "summary": "Plain struct Item<T> also builds across projects without custom formatter"
+   },
+   {
+    "id": "REQ-2283.5",
+    "text": "The GetObjectInfo collection and diagnostic path reached for a closed generic metadata value type handles an empty DeclaringSyntaxReferences collection without indexing element 0 or throwing.",
+    "source": "issue body",
+    "summary": "GetObjectInfo handles empty DeclaringSyntaxReferences without indexing or throwing"
+   }
+  ],
+  "open_questions": [
+   "Which of the direct DeclaringSyntaxReferences[0] accesses at TypeCollector.cs lines 735, 1009, and 1101 actually throws in this repro?"
+  ],
+  "usd": 0.031542799999999996,
+  "short": "MessagePackGenerator and MsgPack00xMessagePackAnalyzer must generate GeneratedMessagePackResolver for referenced closed generic value types"
+ },
+ "environment": [
+  "Linux only: net472 targets and Windows-only tests did not run",
+  ".NET SDK 9.0.321 instead of the pinned 8.0.402, which cannot load the repo's Roslyn 4.12 generator"
+ ],
+ "suite": {
+  "passed": true,
+  "builds": {
+   "base": true,
+   "head": true,
+   "revert": true
+  },
+  "totals": {
+   "base": {
+    "Passed": 764,
+    "NotExecuted": 6
+   },
+   "head": {
+    "Passed": 767,
+    "NotExecuted": 6
+   },
+   "revert": {
+    "Passed": 764,
+    "NotExecuted": 6,
+    "Failed": 3
+   }
+  },
+  "regressions": []
+ },
+ "failbefore": {
+  "new_tests": {
+   "GenericsFormatterTests.ClosedGenericRecordStruct_FromMetadataReference": "exercises the change",
+   "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference": "exercises the change",
+   "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference_UnkeyedMember": "exercises the change"
+  },
+  "existing_tests_exercising_change": []
+ },
+ "hunks": [
+  {
+   "old_start": 1636,
+   "new_start": 1636,
+   "context": "Two assembly-level attributes exist to help with mixing in your own custom forma",
+   "lines": [
+    " ",
+    " Learn more about using a mix of your own custom formatters and automatically generated ones in [the Analyzer section](#analyzer).",
+    " ",
+    "+### Generic types from referenced assemblies",
+    "+",
+    "+Closed generic types defined in a referenced assembly (for example, `Item<int>` where `Item<T>` is defined in another project or NuGet package) can be used as members of your `[MessagePackObject]` types, including generic value types and record structs.",
+    "+Diagnostics about the members of such a type are reported by the assembly that defines it rather than by the consuming project, so any problem must be fixed there.",
+    "+",
+    " ### MagicOnion",
+    " ",
+    " [MagicOnion](https://github.com/Cysharp/MagicOnion) is a code-first gRPC framework based on grpc-dotnet and MessagePack. gRPC usually communicates with Protocol Buffers using IDL. But MagicOnion uses MessagePack for C# and does not need IDL. When communicating C# to C#, schemaless (or rather C# classes as schema) is better than using IDL."
+   ],
+   "id": "H1",
+   "path": "README.md",
+   "kind": "doc",
+   "added": 5,
+   "removed": 0
+  },
+  {
+   "old_start": 45,
+   "new_start": 45,
+   "context": "public class C {",
+   "lines": [
+    "     public int B { get; set; }",
+    " }",
+    " ```",
+    "+",
+    "+## Types from referenced assemblies",
+    "+",
+    "+This analyzer only reports on members declared in the project being compiled.",
+    "+Members of a type defined in a referenced assembly are reported by the project that defines that type, so an unattributed public member of such a type must be fixed in its defining project."
+   ],
+   "id": "H2",
+   "path": "doc/analyzers/MsgPack004.md",
+   "kind": "doc",
+   "added": 5,
+   "removed": 0
+  },
+  {
+   "old_start": 236,
+   "new_start": 236,
+   "context": "public class TypeCollector",
+   "lines": [
+    "     private TypeCollector(Compilation compilation, AnalyzerOptions options, ReferenceSymbols referenceSymbols, ITypeSymbol targetType, Action<Diagnostic>? reportAnalyzerDiagnostic, CancellationToken cancellationToken)",
+    "     {",
+    "         this.typeReferences = referenceSymbols;",
+    "-        this.reportDiagnostic = reportAnalyzerDiagnostic;",
+    "+        this.reportDiagnostic = reportAnalyzerDiagnostic is null ? null : diagnostic => ReportIfLocatedInCompilation(reportAnalyzerDiagnostic, diagnostic);",
+    "         this.options = options;",
+    "         this.compilation = compilation;",
+    "         this.cancellationToken = cancellationToken;"
+   ],
+   "id": "H3",
+   "path": "src/MessagePack.SourceGenerator/CodeAnalysis/TypeCollector.cs",
+   "kind": "source",
+   "added": 1,
+   "removed": 1
+  },
+  {
+   "old_start": 982,
+   "new_start": 982,
+   "context": "public class TypeCollector",
+   "lines": [
+    "                     var stringKey = key is { Value: string stringKeyValue } ? stringKeyValue : default;",
+    "                     if (intKey == null && stringKey == null)",
+    "                     {",
+    "-                        this.reportDiagnostic?.Invoke(Diagnostic.Create(MsgPack00xMessagePackAnalyzer.BothStringAndIntKeyAreNull, ((PropertyDeclarationSyntax)item.DeclaringSyntaxReferences[0].GetSyntax()).Identifier.GetLocation(), formattedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), item.Name));",
+    "+                        this.reportDiagnostic?.Invoke(Diagnostic.Create(MsgPack00xMessagePackAnalyzer.BothStringAndIntKeyAreNull, GetPropertyIdentifierLocation(item), formattedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), item.Name));",
+    "                     }",
+    " ",
+    "                     // A property with an init accessor and an initializer has a default that will be discarded by the deserializer."
+   ],
+   "id": "H4",
+   "path": "src/MessagePack.SourceGenerator/CodeAnalysis/TypeCollector.cs",
+   "kind": "source",
+   "added": 1,
+   "removed": 1
+  },
+  {
+   "old_start": 1074,
+   "new_start": 1074,
+   "context": "public class TypeCollector",
+   "lines": [
+    "                             {",
+    "                                 Diagnostic diagnostic = derivedKeyAttribute is not null && suppressSourceGeneration is not true",
+    "                                     ? Diagnostic.Create(MsgPack00xMessagePackAnalyzer.AOTDerivedKeyAttribute, derivedKeyAttribute.GetSyntax(this.cancellationToken).GetLocation())",
+    "-                                    : Diagnostic.Create(MsgPack00xMessagePackAnalyzer.MemberNeedsKey, item.DeclaringSyntaxReferences[0].GetSyntax().GetLocation(), formattedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), item.Name);",
+    "+                                    : Diagnostic.Create(MsgPack00xMessagePackAnalyzer.MemberNeedsKey, item.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax().GetLocation(), formattedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), item.Name);",
+    "                                 if (nonPublicMembersAreSerialized || (item.DeclaredAccessibility & Accessibility.Public) == Accessibility.Public)",
+    "                                 {",
+    "                                     this.reportDiagnostic?.Invoke(diagnostic);"
+   ],
+   "id": "H5",
+   "path": "src/MessagePack.SourceGenerator/CodeAnalysis/TypeCollector.cs",
+   "kind": "source",
+   "added": 1,
+   "removed": 1
+  },
+  {
+   "old_start": 1426,
+   "new_start": 1426,
+   "context": "public class TypeCollector",
+   "lines": [
+    " ",
+    "     private static Location? GetIdentifierLocation(INamedTypeSymbol type) => ((BaseTypeDeclarationSyntax?)type.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax())?.Identifier.GetLocation();",
+    " ",
+    "+    /// <summary>",
+    "+    /// Gets the location of the identifier of a property, if it is declared in source.",
+    "+    /// </summary>",
+    "+    /// <param name=\"property\">The property symbol. It may be declared in metadata, in which case <see langword=\"null\" /> is returned.</param>",
+    "+    /// <returns>The location of the identifier, or <see langword=\"null\" /> if the property has no declaration in source.</returns>",
+    "+    private static Location? GetPropertyIdentifierLocation(IPropertySymbol property) => (property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as PropertyDeclarationSyntax)?.Identifier.GetLocation();",
+    "+",
+    "+    /// <summary>",
+    "+    /// Reports a diagnostic only when its location belongs to the compilation being analyzed.",
+    "+    /// </summary>",
+    "+    /// <remarks>",
+    "+    /// Types and members that come from metadata (or from another compilation) have no location in the compilation being analyzed.",
+    "+    /// Their problems are reported by the compilation that defines them, so they are dropped here rather than being reported",
+    "+    /// against a location that does not exist, which analyzers are not permitted to do.",
+    "+    /// </remarks>",
+    "+    private void ReportIfLocatedInCompilation(Action<Diagnostic> report, Diagnostic diagnostic)",
+    "+    {",
+    "+        if (diagnostic.Location.IsInSource && this.compilation.ContainsSyntaxTree(diagnostic.Location.SourceTree))",
+    "+        {",
+    "+            report(diagnostic);",
+    "+        }",
+    "+    }",
+    "+",
+    "     private static Location? GetLocation(IParameterSymbol parameter) => parameter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax().GetLocation();",
+    " ",
+    "     private static Location? GetParameterListLocation(IMethodSymbol? method) => ((BaseMethodDeclarationSyntax?)method?.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax())?.ParameterList.GetLocation();"
+   ],
+   "id": "H6",
+   "path": "src/MessagePack.SourceGenerator/CodeAnalysis/TypeCollector.cs",
+   "kind": "source",
+   "added": 23,
+   "removed": 0
+  },
+  {
+   "old_start": 1,
+   "new_start": 1,
+   "context": "",
+   "lines": [
+    " \ufeff// Copyright (c) All contributors. All rights reserved.",
+    " // Licensed under the MIT license. See LICENSE file in the project root for full license information.",
+    " ",
+    "+using Microsoft.CodeAnalysis;",
+    " using Microsoft.CodeAnalysis.CSharp;",
+    "+using Microsoft.CodeAnalysis.Testing;",
+    " using VerifyCS = CSharpSourceGeneratorVerifier<MessagePack.SourceGenerator.MessagePackGenerator>;",
+    " ",
+    " public class GenericsFormatterTests"
+   ],
+   "id": "H7",
+   "path": "tests/MessagePack.SourceGenerator.Tests/GenericsFormatterTests.cs",
+   "kind": "test",
+   "added": 2,
+   "removed": 0
+  },
+  {
+   "old_start": 494,
+   "new_start": 496,
+   "context": "namespace TempProject",
+   "lines": [
+    "         }.RunAsync();",
+    "     }",
+    " ",
+    "+    /// <summary>",
+    "+    /// Asserts that a closed generic value type defined in a referenced <em>assembly</em> (metadata only, no syntax),",
+    "+    /// used as a member type, does not crash the generator or analyzer.",
+    "+    /// </summary>",
+    "+    /// <remarks>",
+    "+    /// See https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2283.",
+    "+    /// </remarks>",
+    "+    [Fact]",
+    "+    public async Task ClosedGenericStruct_FromMetadataReference()",
+    "+    {",
+    "+        string defineSource = \"\"\"",
+    "+using MessagePack;",
+    "+",
+    "+namespace TempProject",
+    "+{",
+    "+    [MessagePackObject]",
+    "+    public struct MyGenericStruct<T>",
+    "+    {",
+    "+        [Key(0)]",
+    "+        public T Content { get; set; }",
+    "+    }",
+    "+}",
+    "+\"\"\";",
+    "+",
+    "+        string usageSource = \"\"\"",
+    "+using MessagePack;",
+    "+",
+    "+namespace TempProject",
+    "+{",
+    "+    [MessagePackObject]",
+    "+    public class MyObject",
+    "+    {",
+    "+        [Key(0)]",
+    "+        public MyGenericStruct<int> Value { get; set; }",
+    "+    }",
+    "+",
+    "+    [GeneratedMessagePackResolver]",
+    "+    partial class MyResolver { }",
+    "+}",
+    "+\"\"\";",
+    "+",
+    "+        await RunWithMetadataReferenceAsync(defineSource, usageSource, \"TempProject.MyResolver.g.cs\");",
+    "+    }",
+    "+",
+    "+    /// <summary>",
+    "+    /// Asserts that a closed generic <em>record struct</em> defined in a referenced assembly, used as a member type,",
+    "+    /// does not crash the generator or analyzer.",
+    "+    /// </summary>",
+    "+    /// <remarks>",
+    "+    /// See https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2283.",
+    "+    /// </remarks>",
+    "+    [Fact]",
+    "+    public async Task ClosedGenericRecordStruct_FromMetadataReference()",
+    "+    {",
+    "+        string defineSource = \"\"\"",
+    "+using MessagePack;",
+    "+",
+    "+namespace Lib;",
+    "+",
+    "+[MessagePackObject]",
+    "+public partial record struct Item<T>([property: Key(0)] string Key);",
+    "+\"\"\";",
+    "+",
+    "+        string usageSource = \"\"\"",
+    "+using MessagePack;",
+    "+using Lib;",
+    "+",
+    "+namespace App;",
+    "+",
+    "+[MessagePackObject]",
+    "+public sealed partial record Cmd([property: Key(0)] string Scope)",
+    "+{",
+    "+    [Key(1)]",
+    "+    public Item<int> Member { get; init; }",
+    "+}",
+    "+",
+    "+[GeneratedMessagePackResolver]",
+    "+partial class AppResolver { }",
+    "+\"\"\";",
+    "+",
+    "+        await RunWithMetadataReferenceAsync(defineSource, usageSource, \"App.AppResolver.g.cs\", LanguageVersion.Latest);",
+    "+    }",
+    "+",
+    "+    /// <summary>",
+    "+    /// Asserts that a closed generic value type from a referenced assembly whose members lack a key attribute",
+    "+    /// does not crash the generator or analyzer, since its member diagnostics belong to the defining assembly.",
+    "+    /// </summary>",
+    "+    /// <remarks>",
+    "+    /// See https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2283.",
+    "+    /// </remarks>",
+    "+    [Fact]",
+    "+    public async Task ClosedGenericStruct_FromMetadataReference_UnkeyedMember()",
+    "+    {",
+    "+        string defineSource = \"\"\"",
+    "+using MessagePack;",
+    "+",
+    "+namespace TempProject",
+    "+{",
+    "+    [MessagePackObject]",
+    "+    public struct MyGenericStruct<T>",
+    "+    {",
+    "+        [Key(0)]",
+    "+        public string Key { get; set; }",
+    "+",
+    "+        public int Unkeyed { get; set; }",
+    "+    }",
+    "+}",
+    "+\"\"\";",
+    "+",
+    "+        string usageSource = \"\"\"",
+    "+using MessagePack;",
+    "+",
+    "+namespace TempProject",
+    "+{",
+    "+    [MessagePackObject]",
+    "+    public class MyObject",
+    "+    {",
+    "+        [Key(0)]",
+    "+        public MyGenericStruct<int> Value { get; set; }",
+    "+    }",
+    "+",
+    "+    [GeneratedMessagePackResolver]",
+    "+    partial class MyResolver { }",
+    "+}",
+    "+\"\"\";",
+    "+",
+    "+        await RunWithMetadataReferenceAsync(defineSource, usageSource, \"TempProject.MyResolver.g.cs\");",
+    "+    }",
+    "+",
+    "+    /// <summary>",
+    "+    /// Compiles <paramref name=\"defineSource\"/> to an assembly image, then verifies that the analyzers and the generator",
+    "+    /// handle <paramref name=\"usageSource\"/> without diagnostics, referencing that image as metadata only,",
+    "+    /// and that the resolver named <paramref name=\"expectedResolverHintName\"/> is generated.",
+    "+    /// </summary>",
+    "+    private static async Task RunWithMetadataReferenceAsync(string defineSource, string usageSource, string expectedResolverHintName, LanguageVersion languageVersion = LanguageVersion.CSharp7_3)",
+    "+    {",
+    "+        MetadataReference definingAssembly = await CompileToMetadataReferenceAsync(\"DefiningProject\", defineSource, languageVersion);",
+    "+",
+    "+        // Run the analyzers and the generator, failing on any diagnostic (the defect surfaced as AD0001 and CS8785).",
+    "+        var test = new VerifyCS.Test(ReferencesSet.MessagePack)",
+    "+        {",
+    "+            LanguageVersion = languageVersion,",
+    "+            TestBehaviors = TestBehaviors.SkipGeneratedSourcesCheck,",
+    "+            TestState =",
+    "+            {",
+    "+                Sources = { usageSource },",
+    "+            },",
+    "+        };",
+    "+        test.TestState.AdditionalReferences.Add(definingAssembly);",
+    "+        await test.RunAsync();",
+    "+",
+    "+        // Verify that the resolver was actually generated for the usage assembly, since the defect caused it to be silently omitted.",
+    "+        ImmutableArray<MetadataReference> frameworkReferences = await ReferenceAssemblies.Net.Net80.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);",
+    "+        Compilation usageCompilation = CreateCompilation(\"App\", usageSource, languageVersion, frameworkReferences.Concat(ReferencesHelper.GetReferences(ReferencesSet.MessagePack)).Append(definingAssembly));",
+    "+        GeneratorDriverRunResult runResult = CSharpGeneratorDriver.Create(new MessagePack.SourceGenerator.MessagePackGenerator().AsSourceGenerator())",
+    "+            .RunGenerators(usageCompilation)",
+    "+            .GetRunResult();",
+    "+        Assert.Empty(runResult.Diagnostics.Where(d => d.Severity >= DiagnosticSeverity.Warning));",
+    "+        var hintNames = runResult.Results.SelectMany(r => r.GeneratedSources).Select(s => s.HintName).ToList();",
+    "+        Assert.Contains(expectedResolverHintName, hintNames);",
+    "+    }",
+    "+",
+    "+    private static async Task<MetadataReference> CompileToMetadataReferenceAsync(string assemblyName, string source, LanguageVersion languageVersion)",
+    "+    {",
+    "+        ImmutableArray<MetadataReference> frameworkReferences = await ReferenceAssemblies.Net.Net80.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);",
+    "+        Compilation compilation = CreateCompilation(assemblyName, source, languageVersion, frameworkReferences.Concat(ReferencesHelper.GetReferences(ReferencesSet.MessagePack)), OutputKind.DynamicallyLinkedLibrary);",
+    "+",
+    "+        using var stream = new MemoryStream();",
+    "+        Microsoft.CodeAnalysis.Emit.EmitResult emitResult = compilation.Emit(stream);",
+    "+        if (!emitResult.Success)",
+    "+        {",
+    "+            throw new InvalidOperationException(\"Failed to compile referenced assembly: \" + string.Join(Environment.NewLine, emitResult.Diagnostics));",
+    "+        }",
+    "+",
+    "+        return MetadataReference.CreateFromImage(stream.ToArray());",
+    "+    }",
+    "+",
+    "+    private static Compilation CreateCompilation(string assemblyName, string source, LanguageVersion languageVersion, IEnumerable<MetadataReference> references, OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary)",
+    "+    {",
+    "+        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(languageVersion);",
+    "+        return CSharpCompilation.Create(",
+    "+            assemblyName,",
+    "+            new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },",
+    "+            references.ToArray(),",
+    "+            new CSharpCompilationOptions(outputKind));",
+    "+    }",
+    "+",
+    "     /// <summary>",
+    "     /// Asserts that the generator can handle directly recursive generic constraints.",
+    "     /// </summary>"
+   ],
+   "id": "H8",
+   "path": "tests/MessagePack.SourceGenerator.Tests/GenericsFormatterTests.cs",
+   "kind": "test",
+   "added": 187,
+   "removed": 0
+  }
+ ],
+ "clusters": [],
+ "claims": [
+  {
+   "statement": "TypeCollector wraps every non-null analyzer diagnostic callback so that a diagnostic is forwarded only when its location is in source and its syntax tree belongs to the current compilation; diagnostics with Location.None or locations elsewhere are silently dropped.",
+   "criteria": [
+    "REQ-2283.2",
+    "REQ-2283.5"
+   ],
+   "hunks": [
+    "H3",
+    "H6"
+   ],
+   "tests": [
+    "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference_UnkeyedMember"
+   ],
+   "id": "C1",
+   "revert": {
+    "hunks": [
+     "H3"
+    ],
+    "compiled": true,
+    "log": "  Failed GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference_UnkeyedMember [154 ms]\n   System.InvalidOperationException : Mismatch between number of diagnostics returned, expected \"0\" actual \"2\"\n// error MsgPack004: Properties and fields of MessagePackObject-attributed types require either KeyAttribute or IgnoreMemberAttribute: global::TempProject.MyGenericStruct<T>.Unkeyed\n// error MsgPack004: Properties and fields of MessagePackObject-attributed types require either KeyAttribute or IgnoreMemberAttribute: global::TempProject.MyGenericStruct<int>.Unkeyed\nFailed!  - Failed:     1, Passed:     2, Skipped:     0, Total:     3, Duration: 4 s - MessagePack.SourceGenerator.Tests.dll (net8.0)",
+    "failing_tests": [
+     "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference_UnkeyedMember"
+    ],
+    "passing_tests": [
+     "GenericsFormatterTests.ClosedGenericRecordStruct_FromMetadataReference",
+     "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference"
+    ]
+   },
+   "status": "checked",
+   "summary": "TypeCollector drops diagnostics lacking source locations in the current compilation"
+  },
+  {
+   "statement": "The BothStringAndIntKeyAreNull diagnostic now obtains its location through GetPropertyIdentifierLocation, which returns the property identifier location for a source PropertyDeclarationSyntax and null when the property has no such source declaration, instead of indexing DeclaringSyntaxReferences[0] and casting it directly.",
+   "criteria": [
+    "REQ-2283.5"
+   ],
+   "hunks": [
+    "H4",
+    "H6"
+   ],
+   "tests": [],
+   "id": "C2",
+   "revert": {
+    "hunks": [
+     "H4"
+    ],
+    "compiled": true,
+    "log": "Passed!  - Failed:     0, Passed:     3, Skipped:     0, Total:     3, Duration: 4 s - MessagePack.SourceGenerator.Tests.dll (net8.0)",
+    "failing_tests": [],
+    "passing_tests": [
+     "GenericsFormatterTests.ClosedGenericRecordStruct_FromMetadataReference",
+     "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference",
+     "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference_UnkeyedMember"
+    ]
+   },
+   "status": "opinion",
+   "summary": "BothStringAndIntKeyAreNull uses GetPropertyIdentifierLocation instead of direct syntax indexing"
+  },
+  {
+   "statement": "The non-AOT MemberNeedsKey diagnostic uses the first declaring syntax reference when one exists and otherwise passes a null location, so an empty DeclaringSyntaxReferences collection is not indexed at element 0.",
+   "criteria": [
+    "REQ-2283.1",
+    "REQ-2283.2",
+    "REQ-2283.5"
+   ],
+   "hunks": [
+    "H5"
+   ],
+   "tests": [
+    "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference_UnkeyedMember"
+   ],
+   "id": "C3",
+   "revert": {
+    "hunks": [
+     "H5"
+    ],
+    "compiled": true,
+    "log": "  Failed GenericsFormatterTests.ClosedGenericRecordStruct_FromMetadataReference [2 s]\n   System.InvalidOperationException : Mismatch between number of diagnostics returned, expected \"0\" actual \"2\"\n// error AD0001: Analyzer 'MessagePack.SourceGenerator.Analyzers.MsgPack00xMessagePackAnalyzer' threw an exception of type 'System.IndexOutOfRangeException' with message 'Index was outside the bounds of the array.'.\nException occurred with following context:\nSystem.IndexOutOfRangeException: Index was outside the bounds of the array.\nDiagnosticResult.CompilerError(\"AD0001\").WithArguments(\"MessagePack.SourceGenerator.Analyzers.MsgPack00xMessagePackAnalyzer\", \"System.IndexOutOfRangeException\", \"Index was outside the bounds of the array.\", \"Exception occurred with following context:\n// warning CS8785: Generator 'MessagePackGenerator' failed to generate source. It will not contribute to the output and compilation errors may occur as a result. Exception was of type 'IndexOutOfRangeException' with message 'Index was outside the bounds of the array.'.\nDiagnosticResult.CompilerWarning(\"CS8785\").WithArguments(\"MessagePackGenerator\", \"IndexOutOfRangeException\", \"Index was outside the bounds of the array.\", \"System.IndexOutOfRangeException: Index was outside the bounds of the array.\n  Failed GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference_UnkeyedMember [61 ms]\n  Failed GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference [37 ms]\nFailed!  - Failed:     3, Passed:     0, Skipped:     0, Total:     3, Duration: 2 s - MessagePack.SourceGenerator.Tests.dll (net8.0)",
+    "failing_tests": [
+     "GenericsFormatterTests.ClosedGenericRecordStruct_FromMetadataReference",
+     "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference",
+     "GenericsFormatterTests.ClosedGenericStruct_FromMetadataReference_UnkeyedMember"
+    ],
+    "passing_tests": []
+   },
+   "status": "checked",
+   "summary": "Non-AOT MemberNeedsKey avoids indexing an empty declaring syntax collection"
+  },
+  {
+   "statement": "README documents that closed generic metadata types, including generic value types and record structs, may be used as message members, and says their member diagnostics are the responsibility of the defining assembly.",
+   "criteria": [
+    "REQ-2283.1",
+    "REQ-2283.4",
+    "REQ-2283.5"
+   ],
+   "hunks": [
+    "H1"
+   ],
+   "tests": [],
+   "id": "C4",
+   "revert": null,
+   "status": "opinion",
+   "summary": "README permits closed generic metadata members and assigns diagnostics to definers"
+  },
+  {
+   "statement": "The MsgPack004 documentation says the analyzer reports only members declared in the current project and that an unattributed public member from a referenced assembly must be fixed in its defining project.",
+   "criteria": [
+    "REQ-2283.5"
+   ],
+   "hunks": [
+    "H2"
+   ],
+   "tests": [],
+   "id": "C5",
+   "revert": null,
+   "status": "opinion",
+   "summary": "MsgPack004 documentation directs referenced assembly member fixes to defining projects"
+  },
+  {
+   "statement": "The three new tests compile a defining source file to a metadata-only assembly, run the consuming source with that reference and no expected diagnostics, then run MessagePackGenerator separately and assert both no warning-or-error generator diagnostics and the expected resolver hint name. The cases cover a keyed plain generic struct, a keyed generic record struct, and a plain generic struct with an unkeyed public property.",
+   "criteria": [
+    "REQ-2283.1",
+    "REQ-2283.2",
+    "REQ-2283.3",
+    "REQ-2283.4",
+    "REQ-2283.5"
+   ],
+   "hunks": [
+    "H7",
+    "H8"
+   ],
+   "tests": [],
+   "id": "C6",
+   "revert": null,
+   "status": "opinion",
+   "summary": "Tests cover metadata-only generic structs, clean diagnostics, and resolver hints"
+  }
+ ],
+ "facts": [
+  "No file of the runtime library (src/MessagePack/), which deserializes untrusted input, is changed.",
+  "No project, package or build file is changed."
+ ],
+ "unexplained": [],
+ "suspicions": [
+  {
+   "hypothesis": "The tests do not establish that app builds successfully or that app.dll contains GeneratedMessagePackResolver: they assert a generator hint name but never run RunGeneratorsAndUpdateCompilation, emit the consuming compilation, or inspect the emitted assembly. An emit failure or omitted resolver type could therefore coexist with passing tests.",
+   "hunks": [
+    "H8"
+   ]
+  },
+  {
+   "hypothesis": "The documentation's premise that the defining assembly reports metadata-member diagnostics is untested and can be false: CompileToMetadataReferenceAsync emits the library without running the analyzers, and a prebuilt dependency may never be analyzed at all.",
+   "hunks": [
+    "H1",
+    "H2",
+    "H6",
+    "H8"
+   ]
+  },
+  {
+   "hypothesis": "None of the new test inputs exercises the BothStringAndIntKeyAreNull branch changed in H4\u2014all keys are ordinary integer keys or absent\u2014so an error specific to the new property-location helper or its metadata input could remain undetected.",
+   "hunks": [
+    "H4",
+    "H6",
+    "H8"
+   ]
+  },
+  {
+   "hypothesis": "A previously valid analyzer diagnostic deliberately created at Location.None will now be silently lost even when it concerns a source type in the current compilation; a regression test with such a diagnostic would distinguish the broad filtering behavior from the metadata-member fix.",
+   "hunks": [
+    "H3",
+    "H6"
+   ]
+  }
+ ],
+ "signals": [],
+ "probes": [
+  {
+   "title": "ReportIfLocatedInCompilation drops Location.None diagnostics from source members",
+   "hypothesis": "C1 wraps every diagnostic through ReportIfLocatedInCompilation; since Location.None has IsInSource == false, any legitimate analyzer diagnostic deliberately created at Location.None for a source type (e.g. MyObject) is silently dropped. The requirement does not ask for this broad filtering \u2014 it asks only to avoid indexing DeclaringSyntaxReferences[0]. A test that has a source member with both Key and StringKey null and expects MsgPack004-style feedback through the diagnostic callback should observe no diagnostic reported at head.",
+   "claims": [
+    "C1",
+    "C2"
+   ],
+   "criteria": [
+    "A TypeCollector constructed against a source MyObject with a property that has neither Key nor StringKey (so BothStringAndIntKeyAreNull fires) forwards the diagnostic to the callback; at head ReportIfLocatedInCompilation drops it only if Location is None, which GetPropertyIdentifierLocation returns for source properties? No \u2014 it returns the identifier location for source PropertyDeclarationSyntax. So the diagnostic is preserved. This probe confirms the wrapper is too broad only if the diagnostic Location is None. Instead test that any unrelated AnalyzerException must not silently be swallowed."
+   ],
+   "kind": "test",
+   "project": "MessagePack.SourceGenerator.Tests",
+   "file_name": "ProbeMsPack2283DiagnosticReporting.cs",
+   "code": "// Copyright (c) All contributors. All rights reserved.\n// Licensed under the MIT license. See LICENSE file in the project root for full license information.\n\nusing System.Collections.Immutable;\nusing System.Linq;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing MessagePack.SourceGenerator;\nusing MessagePack.SourceGenerator.Analyzers;\nusing Microsoft.CodeAnalysis;\nusing Microsoft.CodeAnalysis.CSharp;\nusing Microsoft.CodeAnalysis.Testing;\nusing Xunit;\nusing VerifyCS = CSharpSourceGeneratorVerifier<MessagePack.SourceGenerator.MessagePackGenerator>;\n\npublic class ProbeMsPack2283DiagnosticReporting\n{\n    // A source member in the current compilation with neither Key nor StringKey set\n    // is reported by the analyzer as MemberNeedsKey (MsgPack004) at the member identifier.\n    // H5 changed this to use DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax().GetLocation()\n    // and H6 added the ReportIfLocatedInCompilation wrapper. If a source property whose\n    // declaring syntax reference is present keeps its location, the diagnostic survives.\n    // This establishes the baseline the broad filtering in C1 must not disturb.\n    [Fact]\n    public async Task MsPack004_StillReported_ForSourceMember_NoKeyNoStringKey()\n    {\n        string source = \"\"\"\nusing MessagePack;\n\nnamespace TempProject\n{\n    [MessagePackObject]\n    public class MyObject\n    {\n        public int Unkeyed { get; set; }\n    }\n}\n\"\"\";\n\n        var test = new VerifyCS.Test\n        {\n            LanguageVersion = LanguageVersion.CSharp7_3,\n            TestState = { Sources = { source } },\n            ExpectedDiagnostics =\n            {\n                new DiagnosticResult(MsgPack00xMessagePackAnalyzer.MemberNeedsKey)\n                    .WithSpan(8, 20, 8, 27)\n                    .WithArguments(\"TempProject.MyObject\", \"Unkeyed\"),\n            },\n        };\n        await test.RunAsync();\n    }\n}\n",
+   "means": "If this test passes, the broad wrapper in H6 does not swallow the source-member diagnostic path. If it FAILS with 'expected diagnostic not found' or 'actual diagnostics are ... None', that confirms C1's ReportIfLocatedInCompilation silently drops legitimate diagnostics because a caller supplied Location.None or a syntax tree mismatch, which the requirement does not ask for.",
+   "id": "P1",
+   "rounds": [
+    {
+     "verdict": "does not compile",
+     "reason": "/root/wt/2283-probe-P1/tests/MessagePack.SourceGenerator.Tests/ProbeMsPack2283DiagnosticReporting.cs(55,38): error CS0103: The name 'MsgPack00xMessagePackAnalyzer' does not exist in the current context [/root/wt/2283-probe-P1/tests/MessagePack.SourceGenerator.Tests/MessagePack.SourceGenerator.Tests."
+    },
+    {
+     "verdict": "probe broken",
+     "reason": "The probe fails identically at base and head with VerifyCS's \"Expected source file list to match\" error, not with a missing MsgPack004 diagnostic. It also uses a member-located diagnostic rather than exercising the hypothesized Location.None filtering. The failure is therefore a harness/generated-output setup issue and does not demonstrate the claimed defect.",
+     "by": "kimi-k3-1-pro"
+    },
+    {
+     "verdict": "adversary gave up",
+     "reason": "The hypothesis as constructed does not hold and cannot be fixed into a probe that distinguishes head from base. The premise that \"a legitimate analyzer diagnostic deliberately created at Location.None\" exists in this codebase is unverified: the changed paths (BothStringAndIntKeyAreNull in H4, MemberNeedsKey in H5) both create diagnostics at member identifier locations, not Location.None, so no source member in the current compilation ever yields a Location.None diagnostic for C1's wrapper to drop. To exercise ReportIfLocatedInCompilation one would have to construct a diagnostic with Location.None by other means, which the analyzer does not do and the requirement does not ask for \u2014 so the broad-filtering concern is speculative rather than a defect the requirement covers. Additionally, the probe's failure at base and head with VerifyCS's generated-source-list mismatch shows the actual issue is harness setup (the test must use TestBehaviors.SkipGeneratedSourcesCheck and proper verifier configuration as the change's own tests do), and even a corrected MsgPack004-on-source-member test would pass at both base and head because H5 preserves the source-member location \u2014 it cannot isolate the claimed regression. The stronger, requirement-relevant suspicion (H4's BothStringAndIntKeyAreNull branch and H1/H2 documentation not exercised) would be better probed, but this particular hypothesis (C1 silently drops legitimate Location.None diagnostics) is not supported by the code change and has no concrete source member that triggers it.",
+     "by": "deepseek-4-1-flash-1017"
+    }
+   ],
+   "head": {
+    "compiled": true,
+    "outcomes": {
+     "ProbeMsPack2283DiagnosticReporting.MsPack004_StillReported_ForSourceMember_NoKeyNoStringKey": "Failed"
+    },
+    "log": "  Failed ProbeMsPack2283DiagnosticReporting.MsPack004_StillReported_ForSourceMember_NoKeyNoStringKey [1 s]\n   System.InvalidOperationException : Context: Source generator application\nExpected source file list to match\nFailed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - MessagePack.SourceGenerator.Tests.dll (net8.0)"
+   },
+   "base": {
+    "compiled": true,
+    "outcomes": {
+     "ProbeMsPack2283DiagnosticReporting.MsPack004_StillReported_ForSourceMember_NoKeyNoStringKey": "Failed"
+    },
+    "log": "  Failed ProbeMsPack2283DiagnosticReporting.MsPack004_StillReported_ForSourceMember_NoKeyNoStringKey [1 s]\n   System.InvalidOperationException : Context: Source generator application\nExpected source file list to match\nFailed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - MessagePack.SourceGenerator.Tests.dll (net8.0)"
+   },
+   "result": "probe broken"
+  },
+  {
+   "title": "Generator still crashes on closed generic value type from metadata (yes: it does, per hints; probe required cap) \u2014 alternative: MsgPack00x analyzer does not throw AD0001 on same input",
+   "hypothesis": "The fix is claimed to make MsgPack00xMessagePackAnalyzer not throw AD0001 when a closed generic value type comes from a referenced (metadata) assembly. If under a fresh analyzer run over such a compilation an AD0001 still fires (thrown exception in the analyzer callback), the wrapper fix in H3/H6 is insufficient. The test asserts that running the analyzer on the metadata-consumer scenario yields no AD0001 diagnostics.",
+   "claims": [
+    "C1"
+   ],
+   "criteria": [
+    "GetAnalyzerDiagnosticsAsync (via CSharpCompilation.WithAnalyzers) over usageSource compiled against a metadata-only reference of MyGenericStruct<T> yields no diagnostics whose id is 'AD0001'."
+   ],
+   "kind": "test",
+   "project": "MessagePack.SourceGenerator.Tests",
+   "file_name": "ProbeMsPack2283AnalyzerAd0001.cs",
+   "code": "// Copyright (c) All contributors. All rights reserved.\n// Licensed under the MIT license. See LICENSE file in the project root for full license information.\n\nusing System.Collections.Immutable;\nusing System.IO;\nusing System.Linq;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Microsoft.CodeAnalysis;\nusing Microsoft.CodeAnalysis.CSharp;\nusing Microsoft.CodeAnalysis.Diagnostics;\nusing Microsoft.CodeAnalysis.Testing;\nusing Xunit;\n\npublic class ProbeMsPack2283AnalyzerAd0001\n{\n    private const string DefineSource = \"\"\"\nusing MessagePack;\n\nnamespace TempProject\n{\n    [MessagePackObject]\n    public struct MyGenericStruct<T>\n    {\n        [Key(0)]\n        public T Content { get; set; }\n    }\n}\n\"\"\";\n\n    private const string UsageSource = \"\"\"\nusing MessagePack;\n\nnamespace TempProject\n{\n    [MessagePackObject]\n    public class MyObject\n    {\n        [Key(0)]\n        public MyGenericStruct<int> Value { get; set; }\n    }\n\n    [GeneratedMessagePackResolver]\n    partial class MyResolver { }\n}\n\"\"\";\n\n    [Fact]\n    public async Task Analyzer_DoesNotThrow_AD0001_OnMetadataClosedGenericValueType()\n    {\n        MetadataReference defining = await CompileMetadata(\"DefiningProject\", DefineSource);\n        Compilation compilation = await CreateCompilation(\"App\", UsageSource, defining);\n\n        var analyzer = new MessagePack.SourceGenerator.Analyzers.MsgPack00xMessagePackAnalyzer();\n        var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(analyzer);\n        var options = new Microsoft.CodeAnalysis.Diagnostics.AnalyzerOptions(ImmutableArray<AdditionalText>.Empty);\n\n        ImmutableArray<Diagnostic> diagnostics = await compilation\n            .WithAnalyzers(analyzers, options)\n            .GetAnalyzerDiagnosticsAsync(CancellationToken.None);\n\n        Assert.DoesNotContain(diagnostics, d => d.Id == \"AD0001\");\n    }\n\n    private static async Task<MetadataReference> CompileMetadata(string assemblyName, string source)\n    {\n        ImmutableArray<MetadataReference> framework = await ReferenceAssemblies.Net.Net80.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);\n        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp7_3);\n        CSharpCompilation compilation = CSharpCompilation.Create(\n            assemblyName,\n            new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },\n            framework.Concat(ReferencesHelper.GetReferences(ReferencesSet.MessagePack)).ToArray(),\n            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));\n        using var stream = new MemoryStream();\n        Microsoft.CodeAnalysis.Emit.EmitResult emit = compilation.Emit(stream);\n        Assert.True(emit.Success, string.Join(\"\\n\", emit.Diagnostics));\n        return MetadataReference.CreateFromImage(stream.ToArray());\n    }\n\n    private static async Task<Compilation> CreateCompilation(string assemblyName, string source, MetadataReference defining)\n    {\n        ImmutableArray<MetadataReference> framework = await ReferenceAssemblies.Net.Net80.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);\n        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp7_3);\n        return CSharpCompilation.Create(\n            assemblyName,\n            new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },\n            framework.Concat(ReferencesHelper.GetReferences(ReferencesSet.MessagePack)).Append(defining).ToArray(),\n            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));\n    }\n}\n",
+   "means": "If GetAnalyzerDiagnosticsAsync returns an AD0001 diagnostic, the analyzer still throws on the metadata closed generic value type and the fix is incomplete relative to REQ-2283.2. If the call completes without AD0001, the analyzer path is crash-free in isolation and any remaining problem is generator-only (REQ-2283.3).",
+   "id": "P2",
+   "rounds": [
+    {
+     "verdict": "does not compile",
+     "reason": "/root/wt/2283-probe-P2/tests/MessagePack.SourceGenerator.Tests/ProbeMsPack2283AnalyzerAd0001.cs(57,17): error CS0246: The type or namespace name 'MsgPack00xMessagePackAnalyzer' could not be found (are you missing a using directive or an assembly reference?) [/root/wt/2283-probe-P2/tests/MessagePack."
+    }
+   ],
+   "head": {
+    "compiled": true,
+    "outcomes": {
+     "ProbeMsPack2283AnalyzerAd0001.Analyzer_DoesNotThrow_AD0001_OnMetadataClosedGenericValueType": "Passed"
+    },
+    "log": "Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1, Duration: 2 s - MessagePack.SourceGenerator.Tests.dll (net8.0)"
+   },
+   "base": {
+    "compiled": true,
+    "outcomes": {
+     "ProbeMsPack2283AnalyzerAd0001.Analyzer_DoesNotThrow_AD0001_OnMetadataClosedGenericValueType": "Failed"
+    },
+    "log": "  Failed ProbeMsPack2283AnalyzerAd0001.Analyzer_DoesNotThrow_AD0001_OnMetadataClosedGenericValueType [1 s]\n   Assert.DoesNotContain() Failure: Filter matched in collection\nCollection: [warning AD0001: Analyzer 'MessagePack.SourceGenerator.Analyzers.MsgPack00xMessagePackAnalyzer' threw an exception of type 'System.IndexOutOfRangeException' with message 'Index was outside the bounds of the array.'.\nException occurred with following context:\nSystem.IndexOutOfRangeException: Index was outside the bounds of the array.\nFailed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - MessagePack.SourceGenerator.Tests.dll (net8.0)"
+   },
+   "result": "not reproduced"
+  },
+  {
+   "title": "README claim C4 is contradicted by analyzer running only in the consuming compilation",
+   "hypothesis": "C4 (and H1) claims diagnostics about metadata members are reported by the defining assembly. In practice the defining assembly is emitted as a library (no analyzer run) and may be a prebuilt NuGet package, so no assembly ever reports those member diagnostics. A test where the defining assembly's member is truly unattributed (no [MessagePackObject] but has an unattributed member reachable via the consumer) and the consumer compiles cleanly would pass \u2014 but a strict probe can demonstrate that a member of the metadata type with a BothStringAndIntKeyAreNull condition is not reported anywhere, contradicting the documentation. Under the claim, running the analyzer on the consumer alone should still surface something referring to the referenced member; it does not.",
+   "claims": [
+    "C4",
+    "C5",
+    "H1",
+    "H2"
+   ],
+   "criteria": [
+    "Running the MsgPack00x analyzer against the consumer-only compilation that references a metadata-only library whose member triggers BothStringAndIntKeyAreNull in the analyzer yields no diagnostic whose location is in consumer source but that describes the referenced member (item.Name from metadata)."
+   ],
+   "kind": "test",
+   "project": "MessagePack.SourceGenerator.Tests",
+   "file_name": "ProbeMsPack2283DocClaimUntested.cs",
+   "code": "// Copyright (c) All contributors. All rights reserved.\n// Licensed under the MIT license. See LICENSE file in the project root for full license information.\n\nusing System.Collections.Immutable;\nusing System.IO;\nusing System.Linq;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing MessagePack.SourceGenerator;\nusing Microsoft.CodeAnalysis;\nusing Microsoft.CodeAnalysis.CSharp;\nusing Microsoft.CodeAnalysis.Diagnostics;\nusing Microsoft.CodeAnalysis.Testing;\nusing Xunit;\nusing AnalyzerOptions = Microsoft.CodeAnalysis.Diagnostics.AnalyzerOptions;\n\npublic class ProbeMsPack2283DocClaimUntested\n{\n    private const string DefineSource = \"\"\"\nusing MessagePack;\n\nnamespace TempProject\n{\n    [MessagePackObject]\n    public struct MyGenericStruct<T>\n    {\n        [Key(0)]\n        public string Key { get; set; }\n\n        public int Unkeyed { get; set; }\n    }\n}\n\"\"\";\n\n    [Fact]\n    public async Task MetadataUnkeyedMember_Is_NotReported_Anywhere()\n    {\n        MetadataReference defining = await CompileMetadata(\"DefiningProject\", DefineSource);\n\n        string usageSource = \"\"\"\nusing MessagePack;\n\nnamespace TempProject\n{\n    [MessagePackObject]\n    public class MyObject\n    {\n        [Key(0)]\n        public MyGenericStruct<int> Value { get; set; }\n    }\n}\n\"\"\";\n\n        ImmutableArray<MetadataReference> framework = await ReferenceAssemblies.Net.Net80.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);\n        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp7_3);\n        Compilation compilation = CSharpCompilation.Create(\n            \"App\",\n            new[] { CSharpSyntaxTree.ParseText(usageSource, parseOptions) },\n            framework.Concat(ReferencesHelper.GetReferences(ReferencesSet.MessagePack)).Append(defining).ToArray(),\n            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));\n\n        var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(new global::MessagePack.SourceGenerator.Analyzers.MsgPack00xMessagePackAnalyzer());\n        ImmutableArray<Diagnostic> diagnostics = await compilation\n            .WithAnalyzers(analyzers, new AnalyzerOptions(ImmutableArray<AdditionalText>.Empty))\n            .GetAnalyzerDiagnosticsAsync(CancellationToken.None);\n\n        // README claims the defining assembly reports the metadata member diagnostic.\n        // The defining assembly was emitted without running analyzers, so no diagnostic for Unkeyed exists anywhere.\n        Assert.DoesNotContain(diagnostics, d => d.ToString().Contains(\"Unkeyed\"));\n    }\n\n    private static async Task<MetadataReference> CompileMetadata(string assemblyName, string source)\n    {\n        ImmutableArray<MetadataReference> framework = await ReferenceAssemblies.Net.Net80.ResolveAsync(LanguageNames.CSharp, CancellationToken.None);\n        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp7_3);\n        CSharpCompilation compilation = CSharpCompilation.Create(\n            assemblyName,\n            new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },\n            framework.Concat(ReferencesHelper.GetReferences(ReferencesSet.MessagePack)).ToArray(),\n            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));\n        using var stream = new MemoryStream();\n        Microsoft.CodeAnalysis.Emit.EmitResult emit = compilation.Emit(stream);\n        Assert.True(emit.Success, string.Join(\"\\n\", emit.Diagnostics));\n        return MetadataReference.CreateFromImage(stream.ToArray());\n    }\n}\n",
+   "means": "If the test PASSES it merely shows the consumer reports nothing for the metadata member, confirming C4/H1's documentation claim is untestably aspirational at best. If the assembly producing the metadata had been analyzed, a diagnostic would exist; the change provides no mechanism for that. This probe exposes that the documentation's premise is formulated without verification; the change's own tests (H8) also never exercise the metadata-member diagnostic path despite the claim it is reported by the defining assembly.",
+   "id": "P3",
+   "rounds": [
+    {
+     "verdict": "does not compile",
+     "reason": "/root/wt/2283-probe-P3/tests/MessagePack.SourceGenerator.Tests/ProbeMsPack2283DocClaimUntested.cs(61,71): error CS0246: The type or namespace name 'MsgPack00xMessagePackAnalyzer' could not be found (are you missing a using directive or an assembly reference?) [/root/wt/2283-probe-P3/tests/MessagePac"
+    }
+   ],
+   "head": {
+    "compiled": true,
+    "outcomes": {
+     "ProbeMsPack2283DocClaimUntested.MetadataUnkeyedMember_Is_NotReported_Anywhere": "Passed"
+    },
+    "log": "Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1, Duration: 2 s - MessagePack.SourceGenerator.Tests.dll (net8.0)"
+   },
+   "base": {
+    "compiled": true,
+    "outcomes": {
+     "ProbeMsPack2283DocClaimUntested.MetadataUnkeyedMember_Is_NotReported_Anywhere": "Failed"
+    },
+    "log": "  Failed ProbeMsPack2283DocClaimUntested.MetadataUnkeyedMember_Is_NotReported_Anywhere [1 s]\n   Assert.DoesNotContain() Failure: Filter matched in collection\nCollection: [error MsgPack004: Properties and fields of MessagePackObject-attributed types require either KeyAttribute or IgnoreMemberAttribute: global::TempProject.MyGenericStruct<int>.Unkeyed, warning AD0001: Analyzer 'MessagePack.SourceGenerator.Analyzers.MsgPack00xMessagePackAnalyzer' threw an exception of type 'System.IndexOutOfRangeException' with message 'Index was outside the bounds of the array.'.\nException occurred with following context:\nSystem.IndexOutOfRangeException: Index was outside the bounds of the array.\nFailed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - MessagePack.SourceGenerator.Tests.dll (net8.0)"
+   },
+   "result": "not reproduced"
+  }
+ ],
+ "refusals": [
+  {
+   "question": "Is it intentional to suppress every TypeCollector analyzer diagnostic whose location is Location.None or outside the current compilation, rather than limiting the change to diagnostics for metadata members? This can also remove pre-existing compilation-level or otherwise source-less diagnostics unrelated to issue #2283.",
+   "why": "This is an intentional diagnostic behavior change and may be broader than the crash fix; the owner must decide which diagnostics may now be dropped.",
+   "source": "writer model",
+   "hunks": [
+    "H3",
+    "H6"
+   ],
+   "id": "R1",
+   "summary": "Decide whether TypeCollector may suppress all non-source diagnostics beyond issue #2283"
+  },
+  {
+   "question": "Is it acceptable that member diagnostics for a referenced binary can disappear entirely when its defining project was compiled without these analyzers, as can happen for a NuGet dependency or another prebuilt assembly?",
+   "why": "The documentation and helper comment assume the defining compilation reports the problems, but nothing in the change guarantees that compilation ran the analyzer. Suppressing consumer diagnostics versus retaining or relocating them is a product behavior decision and an interpretation of the requirement.",
+   "source": "writer model",
+   "hunks": [
+    "H1",
+    "H2",
+    "H3",
+    "H6",
+    "H8"
+   ],
+   "id": "R2",
+   "summary": "Decide whether consumer diagnostics may vanish for binaries without analyzers"
+  }
+ ],
+ "routing": {
+  "units": [
+   {
+    "unit": "README.md",
+    "kind": "doc",
+    "hunks": [
+     "H1"
+    ],
+    "lines": 5,
+    "depth": "standard",
+    "why": [
+     "needed to answer R2"
+    ],
+    "read": 5,
+    "read_hunks": [
+     "H1"
+    ],
+    "area": "Documentation"
+   },
+   {
+    "unit": "doc/analyzers/MsgPack004.md",
+    "kind": "doc",
+    "hunks": [
+     "H2"
+    ],
+    "lines": 5,
+    "depth": "standard",
+    "why": [
+     "needed to answer R2"
+    ],
+    "read": 5,
+    "read_hunks": [
+     "H2"
+    ],
+    "area": "Documentation"
+   },
+   {
+    "unit": "src/MessagePack.SourceGenerator/CodeAnalysis/TypeCollector.cs",
+    "kind": "source",
+    "hunks": [
+     "H3",
+     "H4",
+     "H5",
+     "H6"
+    ],
+    "lines": 29,
+    "depth": "full",
+    "why": [
+     "claims without a failing revert: C2",
+     "needed to answer R1, R2",
+     "area Generator analysis is on probation"
+    ],
+    "read": 29,
+    "read_hunks": [
+     "H3",
+     "H4",
+     "H5",
+     "H6"
+    ],
+    "area": "Generator analysis"
+   },
+   {
+    "unit": "tests/MessagePack.SourceGenerator.Tests/GenericsFormatterTests.cs",
+    "kind": "test",
+    "hunks": [
+     "H7",
+     "H8"
+    ],
+    "lines": 189,
+    "depth": "light",
+    "why": [
+     "tests: evidence for the claims"
+    ],
+    "read": 0,
+    "read_hunks": [],
+    "area": "Tests"
+   }
+  ],
+  "total_lines": 228,
+  "read_lines": 39,
+  "share": 0.17105263157894737
+ },
+ "returned": null,
+ "cost": {
+  "usd": 0.09955979,
+  "calls": [
+   {
+    "model": "kimi-k3-1-pro",
+    "prompt": 4059,
+    "completion": 4654,
+    "usd": 0.054658
+   },
+   {
+    "model": "deepseek-4-1-flash-1017",
+    "prompt": 4740,
+    "completion": 3343,
+    "usd": 0.002053248
+   },
+   {
+    "model": "deepseek-4-1-flash-1017",
+    "prompt": 5590,
+    "completion": 842,
+    "usd": 0.0006801479999999999
+   },
+   {
+    "model": "kimi-k3-1-pro",
+    "prompt": 1361,
+    "completion": 577,
+    "usd": 0.008376799999999998
+   },
+   {
+    "model": "deepseek-4-1-flash-1017",
+    "prompt": 5517,
+    "completion": 315,
+    "usd": 0.000352998
+   },
+   {
+    "model": "deepseek-4-1-flash-1017",
+    "prompt": 6156,
+    "completion": 1153,
+    "usd": 0.0009516479999999999
+   },
+   {
+    "model": "deepseek-4-1-flash-1017",
+    "prompt": 6154,
+    "completion": 1141,
+    "usd": 0.000944148
+   }
+  ],
+  "tokens": 45602
+ },
+ "reviewed_at": "2026-11-15 01:07",
+ "seconds": 489
+}

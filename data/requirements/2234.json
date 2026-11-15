@@ -1,0 +1,26 @@
+{
+ "issue": 2234,
+ "title": "The analyzer does not work if SuppressSourceGeneration = true",
+ "url": "https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2234",
+ "summary": "The analyzer regressed after version 3.1.0: starting with 3.1.1, it stops working when SuppressSourceGeneration is set to true.",
+ "criteria": [
+  {
+   "id": "REQ-2234.1",
+   "text": "The analyzer performs its normal analysis when SuppressSourceGeneration=true, restoring the working behavior observed in version 3.1.0.",
+   "source": "issue body"
+  }
+ ],
+ "open_questions": [
+  "Which analyzer and concrete diagnostics or output should be used to verify that it is working?",
+  "What project configuration and reproduction steps demonstrate the failure in version 3.1.1?"
+ ],
+ "thread": {
+  "number": 2234,
+  "title": "The analyzer does not work if SuppressSourceGeneration = true",
+  "url": "https://github.com/MessagePack-CSharp/MessagePack-CSharp/issues/2234",
+  "author": "LavrinenkoRuslan",
+  "body": "#### Bug description\n\nThe analyzer does not work if SuppressSourceGeneration = true. This has happened since version 3.1.1. It still worked in 3.1.0.\n\n",
+  "comments": []
+ },
+ "usd": 0.0104108
+}

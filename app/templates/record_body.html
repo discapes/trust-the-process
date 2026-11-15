@@ -1,0 +1,17 @@
+{% from "groups.html" import groups %}
+<div class="record">
+  <div class="record-head"><span class="{{ 'signed' if r.decision == 'Accepted' else 'changes' }}">{{ r.decision }}</span> by <strong>{{ r.owner }}</strong>, {{ r.signed_at }}, for <code>{{ r.sha|short }}</code></div>
+  <h3 class="rec-h">Checked</h3>
+  {{ groups(r.checked) }}
+  <h3 class="rec-h">Not checked</h3>
+  {{ groups(r.not_checked) }}
+  {% if r.answers %}<h3>Decisions the AI refused to make</h3>
+  <ul class="answers">{% for a in r.answers %}<li><div><span class="rid">{{ a.id }}</span>{{ a.summary|md }}</div><div class="answer"><strong>{{ a.answer }}</strong>{% if a.note %}: {{ a.note }}{% endif %}</div>
+    <details class="more"><summary>More</summary><p class="decision-q">{{ a.question|md }}</p>{% if a.why %}<p class="decision-why">{{ a.why|md }}</p>{% endif %}</details></li>{% endfor %}</ul>{% endif %}
+  {% if r.findings %}<h3>Findings</h3>
+  <ul class="answers">{% for f in r.findings %}<li><div><span class="rid">{{ f.id }}</span>{{ f.title|md }}</div><div class="answer"><strong>{{ f.answer }}</strong>{% if f.note %}: {{ f.note }}{% endif %}</div>
+    {% if f.hypothesis %}<details class="more"><summary>More</summary><p class="decision-q">{{ f.hypothesis|md }}</p></details>{% endif %}</li>{% endfor %}</ul>{% endif %}
+  <h3>Residual risk accepted</h3>
+  <p>{{ r.residual_risk or "None stated." }}</p>
+  <p class="muted small">Stored with the merge as <a href="/pr/{{ r.name }}/record.md">a PR comment in Markdown</a>.</p>
+</div>

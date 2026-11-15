@@ -1,0 +1,19 @@
+{% macro rows(items) %}
+<ul class="rows">
+{% for i in items %}
+  <li>{% if i.id %}<a class="gid" href="#{{ i.id }}">{{ i.id }}</a>{% endif %}<span class="gtext">{{ i.text|md }}</span>{% if i.detail %}<span class="gdetail">{{ i.detail }}</span>{% endif %}</li>
+{% endfor %}
+</ul>
+{% endmacro %}
+
+{% macro groups(gs) %}
+<div class="groups">
+{% for g in gs %}
+  <div class="group">
+    <h3>{{ g.label }}</h3>
+    {% if g.note %}<p class="group-note">{{ g.note }}</p>{% endif %}
+    {{ rows(g["items"]) }}
+  </div>
+{% endfor %}
+</div>
+{% endmacro %}

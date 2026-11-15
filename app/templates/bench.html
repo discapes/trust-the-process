@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="intro">
+  <h1>Planted-defect benchmark</h1>
+  <p class="lede">Copies of the four agent branches, each with one known defect planted into the agent's commit, run through the same review. A defect counts as caught when the packet sends the owner to it: a failing suite, a rule, an unexplained hunk, a contradicted claim, a reproduced finding or a decision that names its code.</p>
+</section>
+{% if b %}
+<dl class="bench-stats">
+  <div><dt>Caught</dt><dd>{{ b.caught }} <small>of {{ b.variants|length }}</small></dd></div>
+  <div><dt>Owner reads, clean branches</dt><dd>{{ b.clean_share|pct }}</dd></div>
+  <div><dt>Owner reads, planted variants</dt><dd>{{ b.variant_share|pct }}</dd></div>
+  <div><dt>Model cost per review</dt><dd>${{ "%.2f"|format(b.usd_per_review) }}</dd></div>
+</dl>
+<table class="units bench">
+  <thead><tr><th>Variant</th><th>Planted defect</th><th>Caught by</th><th class="num">Read</th></tr></thead>
+  <tbody>
+  {% for v in b.variants %}
+  <tr>
+    <td class="variant"><a href="/pr/{{ v.name }}">{{ v.name }}</a></td>
+    <td>{{ v.defect }}</td>
+    <td><div class="chips">{% if v.caught_by %}{% for c in v.caught_by %}<span class="chip checked">{{ c }}</span>{% endfor %}{% else %}<span class="chip contradicted">missed</span>{% endif %}</div></td>
+    <td class="num">{{ v.share|pct }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">The benchmark has not run yet.</p>{% endif %}
+{% endblock %}

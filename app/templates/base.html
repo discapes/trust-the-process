@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Trust the process{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-row">
+    <a class="brand" href="/">Trust the process<span>AI review, human sign-off</span></a>
+    <nav>
+      <a href="/" {% if nav == "changes" %}aria-current="page"{% endif %}>Changes</a>
+      <a href="/track" {% if nav == "track" %}aria-current="page"{% endif %}>Track record</a>
+      <a href="/bench" {% if nav == "bench" %}aria-current="page"{% endif %}>Benchmark</a>
+      <a href="/concept" {% if nav == "concept" %}aria-current="page"{% endif %}>Concept</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">{% block main %}{% endblock %}</main>
+<script>
+// A link to a collapsed item (#C1, #R2) opens it.
+function openTarget() { const el = location.hash && document.getElementById(location.hash.slice(1)); if (el && el.tagName === "DETAILS") el.open = true; }
+addEventListener("hashchange", openTarget); openTarget();
+</script>
+</body>
+</html>

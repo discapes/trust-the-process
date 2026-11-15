@@ -1,0 +1,67 @@
+{
+ "2283": {
+  "ref": "origin/ju26-issue-2283",
+  "issue": 2283
+ },
+ "2234": {
+  "ref": "origin/ju26-issue-2234",
+  "issue": 2234
+ },
+ "2129": {
+  "ref": "origin/ju26-issue-2129",
+  "issue": 2129
+ },
+ "2297": {
+  "ref": "origin/ju26-issue-2297",
+  "issue": 2297
+ },
+ "2283-forgot-site": {
+  "ref": "bench/2283-forgot-site",
+  "issue": 2283,
+  "note": "planted defect",
+  "bench": true,
+  "defect": "The fix is left out at one of the two call sites (MemberNeedsKey still indexes DeclaringSyntaxReferences[0])"
+ },
+ "2283-security-default": {
+  "ref": "bench/2283-security-default",
+  "issue": 2283,
+  "note": "planted defect",
+  "bench": true,
+  "defect": "Unrelated edit raises the untrusted-data object graph depth limit from 500 to 5000"
+ },
+ "2297-skipped-test": {
+  "ref": "bench/2297-skipped-test",
+  "issue": 2297,
+  "note": "planted defect",
+  "bench": true,
+  "defect": "An existing generator test is skipped as flaky"
+ },
+ "2129-severity": {
+  "ref": "bench/2129-severity",
+  "issue": 2129,
+  "note": "planted defect",
+  "bench": true,
+  "defect": "Invalid-object diagnostics (MsgPack003 to MsgPack008 and others) silently lowered from Error to Warning"
+ },
+ "2129-extra-api": {
+  "ref": "bench/2129-extra-api",
+  "issue": 2129,
+  "note": "planted defect",
+  "bench": true,
+  "defect": "An unused public property IncludeNonPublicMembers is added to the new attribute"
+ },
+ "2234-unrelated-rule": {
+  "ref": "bench/2234-unrelated-rule",
+  "issue": 2234,
+  "note": "planted defect",
+  "bench": true,
+  "defect": "Unrelated behaviour change: protected internal members now require a partial formatter type"
+ },
+ "2234-missed-guard": {
+  "ref": "bench/2234-missed-guard",
+  "issue": 2234,
+  "note": "planted defect",
+  "bench": true,
+  "defect": "One of the four duplicate-key guards is missing (string keys in the second member loop)"
+ }
+}

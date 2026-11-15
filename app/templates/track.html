@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="intro">
+  <h1>Track record</h1>
+  <p class="lede">Trust is earned per code area. Owners spot-check units the reviewer cleared (one in {{ spot }}) and record what it missed; an escape or a miss puts the area on probation, where every unit is read one level deeper, until ten clean spot-checks follow. Twenty clean ones make the area trusted.</p>
+</section>
+<table class="areas">
+  <thead><tr><th>Area</th><th>Paths</th><th>Tier</th><th>History</th></tr></thead>
+  <tbody>
+  {% for a in areas %}
+  <tr>
+    <td class="area-name">{{ a.name }}</td>
+    <td>{% for g in a.globs %}<code>{{ g }}</code> {% endfor %}</td>
+    <td><span class="tier {{ a.tier }}">{{ a.tier }}</span></td>
+    <td>{% for e in a.history|reverse %}<div class="event"><span class="ek {{ e.kind|replace(' ', '-') }}">{{ e.kind }}</span> {{ e.date }}{% if e.change %} · #{{ e.change }}{% endif %}{% if e.detail %}<div class="muted small">{{ e.detail }}</div>{% endif %}</div>{% else %}<span class="muted">No events yet</span>{% endfor %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<section class="narrow">
+  <h2>Record a spot-check or an escape</h2>
+  <form class="signoff" method="post" action="/track">
+    <label class="field"><span>Area</span><select name="area">{% for a in areas %}<option>{{ a.name }}</option>{% endfor %}</select></label>
+    <label class="field"><span>Result</span><select name="kind"><option>clean spot-check</option><option>spot-check miss</option><option>escape</option></select></label>
+    <label class="field"><span>Change</span><select name="change"><option value="">—</option>{% for n in names %}<option>{{ n }}</option>{% endfor %}</select></label>
+    <label class="field"><span>What the reviewer missed</span><textarea name="detail" rows="2"></textarea></label>
+    <div class="decide"><button class="primary">Record</button></div>
+  </form>
+</section>
+{% endblock %}

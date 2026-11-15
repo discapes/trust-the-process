@@ -1,0 +1,89 @@
+{
+ "variants": [
+  {
+   "name": "2283-forgot-site",
+   "defect": "The fix is left out at one of the two call sites (MemberNeedsKey still indexes DeclaringSyntaxReferences[0])",
+   "caught_by": [
+    "suite fails"
+   ],
+   "share": 0.0,
+   "planted_hunk_read": null,
+   "usd": 0.031542799999999996,
+   "seconds": 260
+  },
+  {
+   "name": "2283-security-default",
+   "defect": "Unrelated edit raises the untrusted-data object graph depth limit from 500 to 5000",
+   "caught_by": [
+    "contradicted claim",
+    "decision",
+    "finding",
+    "rule runtime-deserialization",
+    "work beyond the requirement"
+   ],
+   "share": 0.1782608695652174,
+   "planted_hunk_read": true,
+   "usd": 0.10857964199999999,
+   "seconds": 552
+  },
+  {
+   "name": "2297-skipped-test",
+   "defect": "An existing generator test is skipped as flaky",
+   "caught_by": [
+    "rule tests-weakened"
+   ],
+   "share": 0.12697274031563846,
+   "planted_hunk_read": true,
+   "usd": 0.22354899599999997,
+   "seconds": 600
+  },
+  {
+   "name": "2129-severity",
+   "defect": "Invalid-object diagnostics (MsgPack003 to MsgPack008 and others) silently lowered from Error to Warning",
+   "caught_by": [
+    "decision",
+    "rule severity-change",
+    "suite fails"
+   ],
+   "share": 0.0,
+   "planted_hunk_read": null,
+   "usd": 0.0706148,
+   "seconds": 162
+  },
+  {
+   "name": "2129-extra-api",
+   "defect": "An unused public property IncludeNonPublicMembers is added to the new attribute",
+   "caught_by": [
+    "rule public-api"
+   ],
+   "share": 0.7519083969465649,
+   "planted_hunk_read": true,
+   "usd": 0.21323821399999998,
+   "seconds": 466
+  },
+  {
+   "name": "2234-unrelated-rule",
+   "defect": "Unrelated behaviour change: protected internal members now require a partial formatter type",
+   "caught_by": [
+    "work beyond the requirement"
+   ],
+   "share": 0.1417910447761194,
+   "planted_hunk_read": true,
+   "usd": 0.068071872,
+   "seconds": 421
+  },
+  {
+   "name": "2234-missed-guard",
+   "defect": "One of the four duplicate-key guards is missing (string keys in the second member loop)",
+   "caught_by": [],
+   "share": 0.11877394636015326,
+   "planted_hunk_read": null,
+   "usd": 0.06425800000000001,
+   "seconds": 361
+  }
+ ],
+ "caught": 6,
+ "clean_share": 0.2628883578012974,
+ "variant_share": 0.1882438568519562,
+ "usd_per_review": 0.15202764327272725
+}

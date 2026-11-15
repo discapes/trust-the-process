@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% from "groups.html" import rows, groups %}
+{% block title %}#{{ p.issue }} · Trust the process{% endblock %}
+{% macro status(s) %}<span class="status {{ s }}">{{ s }}</span>{% endmacro %}
+{% macro readto(hids, covered="") %}{% set rh = hids|select("in", read_of)|list %}
+{% if rh %}<div class="readto"><span class="readto-label">Read</span>{% for h in rh %}<a href="#{{ h }}"><span class="hid">{{ h }}</span> {{ hunks[h].path.rsplit("/", 1)[-1] }}</a>{% endfor %}<span class="depth {{ read_of[rh[0]].depth }}">{{ read_of[rh[0]].depth }} read</span></div>
+{% elif covered %}<div class="readto"><span class="readto-label">Read</span><span class="readto-none">{{ covered }}</span></div>{% endif %}{% endmacro %}
+{% macro href(id) %}<a class="ref" href="#{{ id }}">{{ id }}</a>{% endmacro %}
+{% macro difflines(lines) %}<pre class="diff"><span class="lines">{% for l in lines|dedent %}<span class="{{ {'+': 'add', '-': 'del'}.get(l[0], 'ctx') }}">{{ l.rstrip('\r') or ' ' }}</span>{% endfor %}</span></pre>{% endmacro %}
+{% block main %}
+<header class="pr-head">
+  <div class="eyebrow"><a href="{{ p.requirement.url }}">#{{ p.issue }}</a> · <code>{{ p.ref.split("/")[-1] }}</code> · commit <code>{{ p.commit.sha|short }}</code> by {{ p.commit.author }}{% if p.note %} · <span class="tag">{{ p.note }}</span>{% endif %}</div>
+  <h1>{{ p.requirement.title }}</h1>
+  {% if p.defect %}<p class="commit-msg"><strong>Planted defect:</strong> {{ p.defect }}</p>{% endif %}
+  <p class="commit-msg">Agent's commit message: “{{ p.commit.message.split("\n")[0] }}”</p>
+</header>
+
+<div class="pr-grid">
+<article>
+{% if p.returned %}<div class="returned"><strong>Returned to the agent.</strong> {{ p.returned }}</div>{% endif %}
+
+<section id="checks" class="verify">
+  <div class="verify-grid">
+    <div>
+      <h3>Build and tests</h3>
+      {{ rows(checked["Build and tests"]["items"]) }}
+    </div>
+    {% if "Rule checks" in checked %}
+    <div>
+      <h3>Rule checks</h3>
+      {{ rows(checked["Rule checks"]["items"]) }}
+    </div>
+    {% endif %}
+  </div>
+  {% if p.failbefore.new_tests %}
+  <details class="quiet tests-more"><summary>New tests and their result without the change ({{ p.failbefore.new_tests|length }})</summary>
+  <table class="tests">
+    <tbody>{% for name, v in p.failbefore.new_tests.items() %}
+      <tr><td><code>{{ name }}</code></td><td><span class="fb {{ v|replace(' ', '-') }}">{{ v }}</span></td></tr>{% endfor %}</tbody>
+  </table>
+  </details>
+  {% endif %}
+</section>
+
+<section id="requirement">
+  <h2><span class="n">1</span>What the change must do</h2>
+  <p class="req-short">{{ p.requirement.short|md }}</p>
+  <div class="req-meta">
+    <span>Criteria from <a href="{{ p.requirement.url }}">the issue thread</a> · check this mapping first</span>
+    <details class="quiet req-more"><summary>Full description</summary><p>{{ p.requirement.summary|md }}</p></details>
+  </div>
+  {% for k in p.requirement.criteria %}
+  <details class="item crit" id="{{ k.id }}">
+    <summary><span class="rid">{{ k.id }}</span><span class="item-title">{{ k.summary|md }}</span>
+      <span class="chips">{% for c in serving_of[k.id] %}<a class="chip {{ c.status }}" href="#{{ c.id }}">{{ c.id }}</a>{% else %}<span class="chip none">no claim</span>{% endfor %}</span></summary>
+    <div class="item-body">
+      <p>{{ k.text|md }}</p>
+      <p class="src">From the {{ k.source }}</p>
+    </div>
+  </details>
+  {% endfor %}
+  {% set gaps = not_checked.get("Requirement criteria without a checked claim") %}
+  {% if gaps %}
+  <div class="callout">
+    <p>No checked claim backs {{ "this criterion" if gaps["items"]|length == 1 else "these " ~ gaps["items"]|length ~ " criteria" }}:</p>
+    <ul>{% for i in gaps["items"] %}<li><a href="#{{ i.id }}">{{ i.id }}</a>: {{ i.detail }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if p.requirement.open_questions %}
+  <details class="quiet"><summary>The thread leaves {{ p.requirement.open_questions|length }} point{{ "s" if p.requirement.open_questions|length != 1 }} open</summary>
+    <ul>{% for q in p.requirement.open_questions %}<li>{{ q|md }}</li>{% endfor %}</ul></details>
+  {% endif %}
+</section>
+
+<section id="decisions">
+  <h2><span class="n">2</span>Decisions for you</h2>
+  <p class="muted">The reviewer does not decide these, whatever its confidence. Answer each one when you sign.</p>
+  {% for r in p.refusals %}
+  <details class="item" id="{{ r.id }}">
+    <summary><span class="rid">{{ r.id }}</span><span class="item-title">{{ r.summary|md }}</span><span class="src">{{ r.source }}</span></summary>
+    <div class="item-body">
+      <p class="decision-q">{{ r.question|md }}</p>
+      <p class="decision-why">{{ r.why|md }}</p>
+      {{ readto(r.hunks) }}
+    </div>
+  </details>
+  {% else %}<p class="empty">No decision is reserved for you in this change.</p>{% endfor %}
+</section>
+
+<section id="findings">
+  <h2><span class="n">3</span>Findings</h2>
+  <p class="muted">A second model family (DeepSeek) writes probes against the claims; a probe becomes a finding only when it fails at the head and the writer model agrees the failure shows the defect.</p>
+  {% set found = p.probes|selectattr("result", "equalto", "reproduced")|list %}
+  {% for x in found %}
+  <div class="finding" id="{{ x.id }}">
+    <div class="finding-title"><span class="rid">{{ x.id }}</span>{{ x.title|md }}</div>
+    <p>{{ x.hypothesis|md }}</p>
+    <p class="verdict"><strong>Verified:</strong> {{ x.verdict|md }}</p>
+    <div class="decision-meta">{% for c in x.claims if c.startswith("C") %}{{ href(c) }}{% endfor %}</div>
+    <details><summary>Probe and output</summary>
+      <pre class="code">{{ x.code or x.files }}</pre><pre class="out">{{ x.head.log }}</pre></details>
+  </div>
+  {% else %}<p class="empty">No probe reproduced a defect.</p>{% endfor %}
+  {% set other = p.probes|rejectattr("result", "equalto", "reproduced")|list %}
+  {% if other %}
+  <h3>Attacks that did not produce a finding</h3>
+  <ul class="probes">
+  {% for x in other %}
+    <li><details id="{{ x.id }}"><summary><span class="ptag {{ x.result|replace(' ', '-') }}">{{ x.result }}</span>{{ x.title|md }}</summary>
+      <p>{{ x.hypothesis|md }}</p>
+      {% for r in x.rounds %}<p class="round"><span class="src">{{ r.verdict }}{% if r.by %} · {{ r.by }}{% endif %}</span> {{ r.reason|md }}</p>{% endfor %}
+      <pre class="code">{{ x.code or x.files }}</pre><pre class="out">{{ x.head.log }}</pre></details></li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section id="claims">
+  <h2><span class="n">4</span>Claims</h2>
+  <p class="muted">The writer model's restatement of the diff. A claim is <em>checked</em> when reverting its own hunks makes a test fail.</p>
+  {% for c in p.claims %}
+  <details class="item claim" id="{{ c.id }}">
+    <summary>{{ status(c.status) }}<span class="cid">{{ c.id }}</span><span class="item-title">{{ c.summary|md }}</span></summary>
+    <div class="item-body">
+      <p class="claim-text">{{ c.statement|md }}</p>
+      {{ readto(c.hunks, "nothing to read: a test fails when its code is reverted" if c.status == "checked" else "") }}
+      <div class="claim-refs">{% for k in c.criteria %}<span class="chip">{{ k }}</span>{% else %}<span class="chip scope">beyond the requirement</span>{% endfor %}</div>
+      <div class="claim-ev">
+        {% if c.revert %}
+          {% if c.revert.failing_tests %}{% set ft = c.revert.failing_tests %}<span>Reverting {{ c.revert.hunks|join(", ") }} makes {{ ft|length }} test{{ "s" if ft|length > 1 }} fail{% if ft|length <= 3 %}: {{ ft|join(", ") }}{% endif %}</span>
+          {% if ft|length > 3 %}<details class="quiet"><summary>{{ ft[:2]|join(", ") }} and {{ ft|length - 2 }} more</summary><div class="testlist">{{ ft|join(", ") }}</div></details>{% endif %}
+          {% elif not c.revert.compiled %}<span>Reverting {{ c.revert.hunks|join(", ") }} alone does not compile.</span>
+          {% else %}<span>Reverting {{ c.revert.hunks|join(", ") }} leaves every test passing: no test covers it.</span>{% endif %}
+        {% elif c.status != "contradicted" %}<span>No hunk of its own to revert.</span>{% endif %}
+      </div>
+      {% for hid in c.hunks %}{% set h = hunks[hid] %}
+      <div class="claim-code">
+        <div class="cc-head"><a class="ref" href="#{{ hid }}">{{ hid }}</a><code>{{ h.path }}</code><span class="cc-size">+{{ h.added }} −{{ h.removed }}</span></div>
+        {% if h.kind == "doc" %}
+          <div class="doc-added">{{ doc_text[hid]|mdblock }}</div>
+          {% if h.removed %}<details class="quiet"><summary>Diff with the removed lines</summary>{{ difflines(h.lines) }}</details>{% endif %}
+        {% elif h.lines|length > 40 %}
+          <details class="quiet"><summary>Show {{ h.lines|length }} lines</summary>{{ difflines(h.lines) }}</details>
+        {% else %}{{ difflines(h.lines) }}{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
+  {% if p.unexplained %}<p class="warn">Hunks no claim explains: {% for h in p.unexplained %}{{ href(h) }}{% endfor %}</p>{% endif %}
+</section>
+
+<section id="signoff">
+  <h2><span class="n">5</span>Sign-off</h2>
+  {% if p.returned %}<p class="empty">No sign-off: the change was returned to the agent.</p>
+  {% elif signed %}
+    {% with r = signed %}{% include "record_body.html" %}{% endwith %}
+    <form method="post" action="/pr/{{ p.name }}/unsign"><button class="ghost">Withdraw sign-off</button></form>
+  {% else %}
+  <details class="signing" id="signing">
+    <summary>Final receipt</summary>
+    <div class="signing-body">
+      <p>Your signature stores this record with the merge of commit <code>{{ p.commit.sha|short }}</code>, together with your name,
+        the time, your answer to each of the {{ p.refusals|length }} decision{{ "s" if p.refusals|length != 1 }}{% if s.findings %} and {{ s.findings }} finding{{ "s" if s.findings != 1 }}{% endif %},
+        the files you read and the residual risk you state.</p>
+      <h3 class="rec-h">Checked</h3>
+      {{ groups(checked.values()|list) }}
+      <h3 class="rec-h">Not checked</h3>
+      {{ groups(not_checked.values()|list) }}
+    </div>
+  </details>
+  <form class="signoff" hx-post="/pr/{{ p.name }}/signoff" hx-target="this" hx-swap="outerHTML">
+    <label class="field"><span>Owner</span><input name="owner" required placeholder="Your name"></label>
+    {% for r in p.refusals %}
+    <fieldset><legend><span class="rid">{{ r.id }}</span>{{ r.summary|md }}</legend>
+      <details class="more"><summary>More</summary>
+        <p class="decision-q">{{ r.question|md }}</p>
+        <p class="decision-why">{{ r.why|md }}</p>
+        <div class="decision-meta"><span class="src">{{ r.source }}</span>{% for h in r.hunks %}{{ href(h) }}{% endfor %}</div>
+      </details>
+      <div class="choices">{% for a in ["Accept", "Reject", "Defer to follow-up"] %}
+        <label><input type="radio" name="answer_{{ r.id }}" value="{{ a }}" required> {{ a }}</label>{% endfor %}</div>
+      <input name="note_{{ r.id }}" placeholder="Note (optional)"></fieldset>
+    {% endfor %}
+    {% for x in found %}
+    <fieldset><legend><span class="rid">{{ x.id }}</span>{{ x.title|md }}</legend>
+      <details class="more"><summary>More</summary>
+        <p class="decision-q">{{ x.hypothesis|md }}</p>
+        <p class="decision-why"><strong>Verified:</strong> {{ x.verdict|md }}</p>
+        <div class="decision-meta">{% for c in x.claims if c.startswith("C") %}{{ href(c) }}{% endfor %}</div>
+      </details>
+      <div class="choices">{% for a in ["Must fix before merge", "Accept the risk", "Not a defect"] %}
+        <label><input type="radio" name="answer_{{ x.id }}" value="{{ a }}" required> {{ a }}</label>{% endfor %}</div>
+      <input name="note_{{ x.id }}" placeholder="Note (optional)"></fieldset>
+    {% endfor %}
+    <div class="limits">
+      <h3>Unverified scope &amp; environment limits you are accepting by signing</h3>
+      {{ rows(not_checked["Environment"]["items"] + not_checked["Outside the review"]["items"]) }}
+    </div>
+    <label class="field"><span>Residual risk you accept</span><textarea name="residual_risk" rows="3" placeholder="What could still be wrong, and why you accept it"></textarea></label>
+    <div class="decide">
+      <button name="decision" value="Accepted" class="primary">Accept the change</button>
+      <button name="decision" value="Changes requested" class="ghost">Request changes</button>
+    </div>
+  </form>
+  {% endif %}
+</section>
+
+<section id="diff">
+  <h2><span class="n">6</span>Diff</h2>
+  {% for path, hs in files.items() %}
+  {% set u = units[path] %}
+  <div class="file">
+    <div class="file-head"><code>{{ path }}</code><span class="depth {{ u.depth }}">{{ u.depth }}</span></div>
+    <div class="file-why">{% if u.read %}{{ u.read }} of {{ u.lines }} lines to read: {% endif %}{% for w in u.why %}{{ refs(w) }}{% if not loop.last %}; {% endif %}{% endfor %}</div>
+    {% for h in hs %}
+    <div class="hunk" id="{{ h.id }}">
+      <div class="hunk-head"><span class="hid">{{ h.id }}</span><span class="hctx">@@ -{{ h.old_start }} +{{ h.new_start }} @@ {{ h.context }}</span>
+        <span class="hclaims">{% for c in claims_by_hunk.get(h.id, []) %}<a class="chip {{ c.status }}" href="#{{ c.id }}">{{ c.id }}</a>{% else %}{% if h.kind in ("source", "build") %}<span class="chip contradicted">unexplained</span>{% endif %}{% endfor %}</span></div>
+      {% if h.lines|length > 60 %}<details><summary>{{ h.added }} added, {{ h.removed }} removed lines</summary>{{ difflines(h.lines) }}</details>
+      {% else %}{{ difflines(h.lines) }}{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% for c in p.clusters %}
+  <div class="file" id="{{ c.id }}">
+    <div class="file-head"><code>{{ c.id }} · {{ c.files|length }} generated file{{ "s" if c.files|length > 1 }}</code><span class="depth {{ units[c.id].depth }}">{{ units[c.id].depth }}</span></div>
+    <div class="file-why">{% for w in units[c.id].why %}{{ refs(w) }}{% if not loop.last %}; {% endif %}{% endfor %}</div>
+    <p class="muted small">Representative: <code>{{ c.representative }}</code>{% if c.files|length > 1 %}. Every other file in this cluster has the identical set of changed lines.{% endif %}</p>
+    {% for h in c.diff %}{{ difflines(h.lines) }}{% endfor %}
+    {% if c.files|length > 1 %}<details class="quiet"><summary>All {{ c.files|length }} files</summary><ul class="filelist">{% for f in c.files %}<li><code>{{ f }}</code></li>{% endfor %}</ul></details>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+</article>
+
+<aside>
+  <div class="panel sticky">
+    <a class="big" href="#diff">{{ p.routing.read_lines|num }}<small> of {{ p.routing.total_lines|num }} lines</small></a>
+    <div class="label">to read, {{ p.routing.share|pct }} of the change</div>
+    <div class="meter"><span style="width: {{ (p.routing.share * 100)|round(1) }}%"></span></div>
+    <dl class="kv">
+      <div><dt>Claims checked</dt><dd>{{ s.checked }} of {{ p.claims|length }}</dd></div>
+      <div><dt>Findings</dt><dd>{{ s.findings }}</dd></div>
+      <div><dt>Decisions for you</dt><dd>{{ s.refusals }}</dd></div>
+      <div><dt>Suite</dt><dd>{{ "passes" if p.suite.passed else "fails" }}</dd></div>
+      <div><dt>Model cost</dt><dd>${{ "%.3f"|format(p.cost.usd) }}</dd></div>
+      <div><dt>Review time</dt><dd>{{ (p.seconds / 60)|round(1) }} min</dd></div>
+    </dl>
+    <nav class="toc">
+      <a href="#checks">Automated checks</a><a href="#requirement">Requirement</a><a href="#decisions">Decisions</a><a href="#findings">Findings</a><a href="#claims">Claims</a>
+      <a href="#signoff">Sign-off</a><a href="#diff">Diff</a>
+    </nav>
+    <div class="signstate">{% if p.returned %}<span class="changes-req">Returned to agent</span>{% elif signed %}<span class="signed">{{ signed.decision }}</span> by {{ signed.owner }}{% else %}<span class="awaiting">Awaiting sign-off</span>{% endif %}</div>
+  </div>
+</aside>
+</div>
+{% endblock %}

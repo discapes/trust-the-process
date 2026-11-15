@@ -1,0 +1,96 @@
+[
+ {
+  "name": "Generator analysis",
+  "globs": [
+   "src/MessagePack.SourceGenerator/CodeAnalysis/*"
+  ],
+  "history": [
+   {
+    "date": "2026-11-14",
+    "kind": "clean spot-check",
+    "detail": "A human check found the reported bug absent from this base. The packet raised it as R5: 6 of 10 new tests pass without the change.",
+    "change": "2234"
+   },
+   {
+    "date": "2026-11-14",
+    "kind": "spot-check miss",
+    "detail": "A human probe showed a positional record with [Key(null)] loses MsgPack005 and reports only a misleading MsgPack007. The reviewer asked about the broader filter (R1), but no probe reproduced this case.",
+    "change": "2283"
+   },
+   {
+    "date": "2026-11-14",
+    "kind": "spot-check miss",
+    "detail": "Planted: one of the four duplicate-key guards removed. The suite, the claim reverts and three probes all passed.",
+    "change": "2234-missed-guard"
+   }
+  ]
+ },
+ {
+  "name": "Analyzers",
+  "globs": [
+   "src/MessagePack.SourceGenerator/Analyzers/*",
+   "src/MessagePack.SourceGenerator/AnalyzerReleases.*"
+  ],
+  "history": []
+ },
+ {
+  "name": "Code templates",
+  "globs": [
+   "src/MessagePack.SourceGenerator/Transforms/*"
+  ],
+  "history": [
+   {
+    "date": "2026-11-14",
+    "kind": "clean spot-check",
+    "detail": "A human probe showed ExcludeFromCodeCoverage compiles for netstandard2.0 and net472, so the guard has no reason. The packet raised it as R1; the adversary proved it only in the 2297-skipped-test run.",
+    "change": "2297"
+   }
+  ]
+ },
+ {
+  "name": "Generator other",
+  "globs": [
+   "src/MessagePack.SourceGenerator/*"
+  ],
+  "history": []
+ },
+ {
+  "name": "Public annotations",
+  "globs": [
+   "src/MessagePack.Annotations/*"
+  ],
+  "history": []
+ },
+ {
+  "name": "Runtime library",
+  "globs": [
+   "src/MessagePack/*"
+  ],
+  "history": []
+ },
+ {
+  "name": "Tests",
+  "globs": [
+   "tests/*"
+  ],
+  "history": []
+ },
+ {
+  "name": "Documentation",
+  "globs": [
+   "*.md",
+   "doc/*"
+  ],
+  "history": []
+ },
+ {
+  "name": "Build",
+  "globs": [
+   "*.csproj",
+   "*.props",
+   "*.targets",
+   "global.json"
+  ],
+  "history": []
+ }
+]
